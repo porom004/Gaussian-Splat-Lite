@@ -1,0 +1,9 @@
+*.DS_Store
+._*
+docs/CNAME
+node_modules/
+site/
+site-dist/
+site-repo/
+*.zip
+*.gltf
