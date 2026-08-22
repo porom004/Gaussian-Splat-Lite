@@ -11,6 +11,9 @@ const fileInput = document.querySelector("#file-input");
 const emptyState = document.querySelector("#empty-state");
 const resetViewButton = document.querySelector("#reset-view");
 const loadExampleButton = document.querySelector("#load-example");
+const urlForm = document.querySelector("#url-form");
+const modelUrlInput = document.querySelector("#model-url");
+const loadUrlButton = document.querySelector("#load-url");
 const loadingBackdrop = document.querySelector("#loading-backdrop");
 const loadingPanel = document.querySelector("#loading-panel");
 const loadingName = document.querySelector("#loading-name");
@@ -424,6 +427,28 @@ function fileTypeFor(file) {
   return undefined;
 }
 
+function modelFromUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+
+  const encodedName = url.pathname.split("/").filter(Boolean).at(-1) ?? "";
+  let name = encodedName;
+  try {
+    name = decodeURIComponent(encodedName);
+  } catch {
+    // Keep the encoded path segment when it contains malformed escape sequences.
+  }
+
+  if (!fileTypeFor({ name })) return undefined;
+  return { name, size: 0, url };
+}
+
 function isFileDrag(event) {
   return Array.from(event.dataTransfer?.types ?? []).includes("Files");
 }
@@ -466,7 +491,7 @@ function setLoading(file, loaded = 0, total = file.size) {
   } else {
     loadingProgress.classList.add("is-indeterminate");
     loadingProgress.removeAttribute("aria-valuenow");
-    loadingDetail.textContent = "Decoding locally…";
+    loadingDetail.textContent = "Decoding in browser…";
   }
 }
 
@@ -511,7 +536,7 @@ async function loadFile(file, { credit = "" } = {}) {
     fileName: file.name,
     fileType,
     stream: file.stream(),
-    streamLength: file.size,
+    streamLength: file.size || undefined,
     onProgress: (event) => {
       if (loadId !== activeLoad) return;
       setLoading(file, event.loaded, event.total || file.size);
@@ -543,7 +568,8 @@ async function loadFile(file, { credit = "" } = {}) {
     resetViewButton.hidden = false;
     fileMeta.hidden = false;
     fileName.textContent = file.name;
-    fileStats.textContent = `${formatNumber.format(activeSplat.numSplats)} splats · ${formatBytes(file.size)}`;
+    const sizeLabel = file.size > 0 ? ` · ${formatBytes(file.size)}` : "";
+    fileStats.textContent = `${formatNumber.format(activeSplat.numSplats)} splats${sizeLabel}`;
     modelCredit.textContent = credit;
     modelCreditPrefix.hidden = !credit;
     modelCredit.hidden = !credit;
@@ -562,40 +588,49 @@ async function loadFile(file, { credit = "" } = {}) {
   }
 }
 
-async function loadExample() {
+async function loadRemoteModel(model, button) {
   const requestId = ++activeLoad;
-  const pendingFile = { name: EXAMPLE_MODEL.name, size: EXAMPLE_MODEL.size };
-  loadExampleButton.disabled = true;
+  const pendingFile = { name: model.name, size: model.size };
+  button.disabled = true;
   setLoading(pendingFile, -1, 0);
-  setStatus(`Loading ${EXAMPLE_MODEL.name}`, "loading");
+  setStatus(`Loading ${model.name}`, "loading");
 
   try {
-    const response = await fetch(EXAMPLE_MODEL.url);
+    const response = await fetch(model.url);
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`);
     }
     if (!response.body) {
-      throw new Error("The example response did not include a readable stream");
+      throw new Error("The response did not include a readable stream");
     }
     if (requestId !== activeLoad) return;
 
     const contentLength = Number(response.headers.get("content-length"));
     const file = {
-      name: EXAMPLE_MODEL.name,
-      size: contentLength > 0 ? contentLength : EXAMPLE_MODEL.size,
+      name: model.name,
+      size: contentLength > 0 ? contentLength : model.size,
       stream: () => response.body,
     };
-    await loadFile(file, { credit: EXAMPLE_MODEL.credit });
+    await loadFile(file, { credit: model.credit });
   } catch (error) {
     if (requestId !== activeLoad) return;
     clearLoading();
-    setStatus(`Could not load ${EXAMPLE_MODEL.name}`, "error");
-    const detail = error instanceof Error ? error.message : String(error);
-    console.error(`Failed to load ${EXAMPLE_MODEL.name}`, error);
-    showToast(`Could not load ${EXAMPLE_MODEL.name}: ${detail}`);
+    setStatus(`Could not load ${model.name}`, "error");
+    const detail =
+      error instanceof TypeError
+        ? "Request failed. Check the URL and the server's CORS headers."
+        : error instanceof Error
+          ? error.message
+          : String(error);
+    console.error(`Failed to load ${model.name}`, error);
+    showToast(`Could not load ${model.name}: ${detail}`);
   } finally {
-    loadExampleButton.disabled = false;
+    button.disabled = false;
   }
+}
+
+function loadExample() {
+  loadRemoteModel(EXAMPLE_MODEL, loadExampleButton);
 }
 
 function openFilePicker() {
@@ -622,6 +657,20 @@ for (const button of document.querySelectorAll("[data-file-picker]")) {
 }
 
 loadExampleButton.addEventListener("click", loadExample);
+
+urlForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const model = modelFromUrl(modelUrlInput.value.trim());
+  if (!model) {
+    showToast("Enter a valid HTTP(S) URL ending in .ply or .spz.");
+    setStatus("Enter a valid PLY or SPZ URL", "error");
+    modelUrlInput.focus();
+    return;
+  }
+
+  modelUrlInput.blur();
+  loadRemoteModel(model, loadUrlButton);
+});
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];

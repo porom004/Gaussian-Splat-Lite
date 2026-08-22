@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="A local PLY and SPZ viewer powered by Gaussian Splat Lite."
+      content="A PLY and SPZ Gaussian Splatting viewer powered by Gaussian Splat Lite."
     />
-    <title>Gaussian Splat Lite · Local Viewer</title>
+    <title>Gaussian Splat Lite · Gaussian Splatting Viewer</title>
     <link
       rel="icon"
       type="image/svg+xml"
@@ -27,11 +27,11 @@
       ></div>
 
       <header class="toolbar">
-        <div class="brand" aria-label="Gaussian Splat Lite local viewer">
+        <div class="brand" aria-label="Gaussian Splat Lite viewer">
           <span class="brand-mark" aria-hidden="true"></span>
           <span class="brand-copy">
-            <strong>Gaussian Splat Lite</strong>
-            <small>Local PLY / SPZ viewer</small>
+            <strong>Gaussian Splat <span class="brand-accent">Lite</span></strong>
+            <small>Gaussian Splatting Viewer</small>
           </span>
         </div>
 
@@ -79,16 +79,36 @@
               <path d="M27 5.5v8h8M18 29l6-6 6 6M24 23v13" />
             </svg>
           </div>
-          <p class="eyebrow">Local file viewer</p>
+          <p class="eyebrow">Gaussian Splatting Viewer</p>
           <h1 id="viewer-title">Drop a splat file here</h1>
           <p class="empty-description">
-            Open a <strong>.ply</strong> or <strong>.spz</strong> file from your
-            device. It stays in this browser and is decoded locally.
+            Choose a <strong>.ply</strong> or <strong>.spz</strong> file from your
+            device, or load one from a URL. The model is decoded in this browser.
           </p>
           <button class="button button-large" type="button" data-file-picker>
             Choose PLY or SPZ
           </button>
-          <p class="empty-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</p>
+          <div class="source-divider" aria-hidden="true">
+            <span>or load from URL</span>
+          </div>
+          <form id="url-form" class="url-form">
+            <label class="visually-hidden" for="model-url">
+              PLY or SPZ model URL
+            </label>
+            <input
+              id="model-url"
+              class="url-input"
+              type="url"
+              inputmode="url"
+              autocomplete="url"
+              placeholder="https://example.com/model.spz"
+              required
+            />
+            <button id="load-url" class="button url-button" type="submit">
+              Load
+            </button>
+          </form>
+          <p class="url-hint">Remote host must allow CORS</p>
         </section>
       </main>
 
@@ -101,7 +121,7 @@
           id="loading-progress"
           class="progress-track is-indeterminate"
           role="progressbar"
-          aria-label="File loading progress"
+          aria-label="Model loading progress"
         >
           <span id="loading-progress-fill"></span>
         </div>
@@ -111,7 +131,7 @@
       <footer class="statusbar">
         <div class="status-message" aria-live="polite">
           <span id="status-dot" class="status-dot"></span>
-          <span id="status-text">Ready for a local file</span>
+          <span id="status-text">Ready for a file or URL</span>
         </div>
         <div id="file-meta" class="file-meta" hidden>
           <span id="file-name"></span>
