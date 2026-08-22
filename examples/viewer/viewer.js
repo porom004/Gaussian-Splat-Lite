@@ -37,10 +37,11 @@ const renderOptionsContent = document.querySelector("#render-options-content");
 const renderOptionsReset = document.querySelector("#render-options-reset");
 
 const EXAMPLE_MODEL = {
-  name: "lion.v3.spz",
-  size: 4303196,
-  url: new URL("../lion.v3.spz", import.meta.url),
-  credit: "Renaud",
+  name: "tomatoes.v4.spz",
+  size: 9360535,
+  url: new URL("../tomatoes.v4.spz", import.meta.url),
+  credit: "Grail",
+  rotationX: 0,
 };
 
 const scene = new THREE.Scene();
@@ -520,7 +521,10 @@ function frameSplat(splat) {
   controls.setCamera(camera);
 }
 
-async function loadFile(file, { credit = "" } = {}) {
+async function loadFile(
+  file,
+  { credit = "", rotationX = Math.PI } = {},
+) {
   const fileType = fileTypeFor(file);
   if (!fileType) {
     showToast("Unsupported file. Choose a .ply or .spz file.");
@@ -543,9 +547,9 @@ async function loadFile(file, { credit = "" } = {}) {
     },
   });
 
-  // Match the viewer convention: file-space +Y down / +Z forward
-  // becomes Three.js +Y up / -Z forward without changing decoded splat data.
-  candidate.quaternion.set(1, 0, 0, 0);
+  // Keep the viewer's existing convention for user-provided files while
+  // allowing bundled examples that are already Y-up to preserve their orientation.
+  candidate.rotation.x = rotationX;
 
   try {
     await candidate.initialized;
@@ -611,7 +615,10 @@ async function loadRemoteModel(model, button) {
       size: contentLength > 0 ? contentLength : model.size,
       stream: () => response.body,
     };
-    await loadFile(file, { credit: model.credit });
+    await loadFile(file, {
+      credit: model.credit,
+      rotationX: model.rotationX,
+    });
   } catch (error) {
     if (requestId !== activeLoad) return;
     clearLoading();
