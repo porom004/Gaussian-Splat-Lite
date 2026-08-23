@@ -191,7 +191,6 @@ type DecodedExtResult = {
   numSplats: number;
   ext0: Uint32Array;
   ext1: Uint32Array;
-  localCenters: Float32Array;
   sh1?: Uint32Array;
   sh2?: Uint32Array;
   sh3a?: Uint32Array;
@@ -202,7 +201,6 @@ function toExtResult(decoded: DecodedExtResult): ExtResult {
   return {
     numSplats: decoded.numSplats,
     extArrays: [decoded.ext0, decoded.ext1],
-    localCenters: decoded.localCenters,
     extra: {
       sh1: decoded.sh1,
       sh2: decoded.sh2,
