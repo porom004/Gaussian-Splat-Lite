@@ -14,7 +14,6 @@ export type ExtSplatsOptions = {
   streamLength?: number;
   maxSplats?: number;
   extArrays?: [Uint32Array, Uint32Array];
-  localCenters?: Float32Array;
   numSplats?: number;
   construct?: (splats: ExtSplats) => Promise<void> | void;
   onProgress?: (event: ProgressEvent) => void;
@@ -37,7 +36,6 @@ export class ExtSplats implements SplatSource {
 
   private textures: [THREE.DataArrayTexture, THREE.DataArrayTexture];
   private shTextures: SplatShTextures = {};
-  private localCenters: Float32Array | null = null;
 
   constructor(options: ExtSplatsOptions = {}) {
     this.textures = [ExtSplats.emptyTexture, ExtSplats.emptyTexture];
@@ -49,7 +47,6 @@ export class ExtSplats implements SplatSource {
     this.isInitialized = false;
     this.disposeTextures();
     this.extra = {};
-    this.localCenters = null;
     this.maxSplats = options.maxSplats ?? 0;
     this.needsUpdate = true;
 
@@ -89,10 +86,6 @@ export class ExtSplats implements SplatSource {
       this.numSplats = 0;
       this.extArrays = [new Uint32Array(0), new Uint32Array(0)];
     }
-    this.localCenters =
-      options.localCenters && options.localCenters.length >= this.numSplats * 3
-        ? options.localCenters
-        : null;
     this.needsUpdate = true;
   }
 
@@ -120,7 +113,6 @@ export class ExtSplats implements SplatSource {
   dispose() {
     this.disposeTextures();
     this.extArrays = [new Uint32Array(0), new Uint32Array(0)];
-    this.localCenters = null;
     this.extra = {};
   }
 
@@ -152,7 +144,6 @@ export class ExtSplats implements SplatSource {
   }
 
   ensureSplats(numSplats: number): [Uint32Array, Uint32Array] {
-    this.localCenters = null;
     const currentCapacity = this.extArrays[0].length / 4;
     const targetSize =
       numSplats <= this.maxSplats
@@ -221,24 +212,6 @@ export class ExtSplats implements SplatSource {
   forEachCenter(
     callback: (index: number, x: number, y: number, z: number) => void,
   ) {
-    const localCenters = this.localCenters;
-    if (localCenters && localCenters.length >= this.numSplats * 3) {
-      // Decoder centers are a one-shot load fast path. Release them after the
-      // first center build; later edits/transforms use the raw center-only path.
-      this.localCenters = null;
-      for (let index = 0; index < this.numSplats; index += 1) {
-        const i3 = index * 3;
-        callback(
-          index,
-          localCenters[i3],
-          localCenters[i3 + 1],
-          localCenters[i3 + 2],
-        );
-      }
-      return;
-    }
-    this.localCenters = null;
-
     const [extA, extB] = this.extArrays;
     const centerView = new Float32Array(
       extA.buffer,
