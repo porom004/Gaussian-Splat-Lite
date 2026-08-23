@@ -3,38 +3,24 @@ use std::array;
 use gaussian_splat_lib::{
     decoder::{SplatInit, SplatProps, SplatReceiver},
     splat_encode::{
-        decode_ext_splat_center, encode_ext_rgb, encode_ext_splat, encode_ext_splat_center,
-        encode_ext_splat_opacity, encode_ext_splat_quat, encode_ext_splat_rgb,
-        encode_ext_splat_scale, get_splat_tex_size,
+        encode_ext_rgb, encode_ext_splat, encode_ext_splat_center, encode_ext_splat_opacity,
+        encode_ext_splat_quat, encode_ext_splat_rgb, encode_ext_splat_scale, get_splat_tex_size,
     },
 };
-use js_sys::{Float32Array, Object, Reflect, Uint32Array};
+use js_sys::{Object, Reflect, Uint32Array};
 use wasm_bindgen::JsValue;
-
-fn decode_ext_local_center(ext_a: &[u32], ext_b: &[u32]) -> [f32; 3] {
-    let scale_x = (ext_b[1] >> 16) as u16;
-    let scale_y = ext_b[2] as u16;
-    let scale_z = (ext_b[2] >> 16) as u16;
-    if scale_x == 0xfc00 && scale_y == 0xfc00 && scale_z == 0xfc00 {
-        [f32::NAN; 3]
-    } else {
-        decode_ext_splat_center(ext_a)
-    }
-}
 
 pub struct ExtSplatsData {
     pub max_splats: usize,
     pub num_splats: usize,
     pub max_sh_degree: usize,
     pub ext_arrays: [Uint32Array; 2],
-    pub local_centers: Float32Array,
     pub sh1: Option<Uint32Array>,
     pub sh2: Option<Uint32Array>,
     pub sh3a: Option<Uint32Array>,
     pub sh3b: Option<Uint32Array>,
     buffer_a: Vec<u32>,
     buffer_b: Vec<u32>,
-    center_buffer: Vec<f32>,
     buffer_base: usize,
     buffer_count: usize,
     buffer_dirty: bool,
@@ -50,14 +36,12 @@ impl ExtSplatsData {
                 Uint32Array::new_with_length(0),
                 Uint32Array::new_with_length(0),
             ],
-            local_centers: Float32Array::new_with_length(0),
             sh1: None,
             sh2: None,
             sh3a: None,
             sh3b: None,
             buffer_a: Vec::new(),
             buffer_b: Vec::new(),
-            center_buffer: Vec::new(),
             buffer_base: 0,
             buffer_count: 0,
             buffer_dirty: false,
@@ -96,12 +80,6 @@ impl ExtSplatsData {
             &JsValue::from(self.ext_arrays[1].clone()),
         )
         .unwrap();
-        Reflect::set(
-            &object,
-            &JsValue::from_str("localCenters"),
-            &self.local_centers,
-        )
-        .unwrap();
         if let Some(sh1) = self.sh1.as_ref() {
             Reflect::set(&object, &JsValue::from_str("sh1"), &JsValue::from(sh1)).unwrap();
         }
@@ -124,24 +102,6 @@ impl ExtSplatsData {
 
     fn ensure_buffer_a(&mut self, count: usize) {
         self.buffer_a.resize(count * 4, 0);
-    }
-
-    fn refresh_local_centers(&mut self) {
-        let base = self.buffer_base;
-        let count = self.buffer_count;
-        self.center_buffer.resize(count * 3, f32::NAN);
-
-        for i in 0..count {
-            let [i3, i4] = [i * 3, i * 4];
-            self.center_buffer[i3..i3 + 3].copy_from_slice(&decode_ext_local_center(
-                &self.buffer_a[i4..i4 + 4],
-                &self.buffer_b[i4..i4 + 4],
-            ));
-        }
-
-        self.local_centers
-            .subarray((base * 3) as u32, ((base + count) * 3) as u32)
-            .copy_from(&self.center_buffer[..count * 3]);
     }
 
     fn flush_buffers(&mut self) {
@@ -182,34 +142,6 @@ impl ExtSplatsData {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn local_center_preserves_ext_precision_and_filters_disabled_splats() {
-        let center = [1.2345, -2.3456, 3.4567];
-        let mut ext_a = [0_u32; 4];
-        let mut ext_b = [0_u32; 4];
-        encode_ext_splat(
-            &mut ext_a,
-            &mut ext_b,
-            center,
-            1.0,
-            [1.0; 3],
-            [1.0; 3],
-            [0.0, 0.0, 0.0, 1.0],
-        );
-
-        assert_eq!(decode_ext_local_center(&ext_a, &ext_b), center);
-
-        encode_ext_splat_scale(&mut ext_b, [0.0; 3]);
-        assert!(decode_ext_local_center(&ext_a, &ext_b)
-            .iter()
-            .all(|value| value.is_nan()));
-    }
-}
-
 impl SplatReceiver for ExtSplatsData {
     fn init_splats(&mut self, init: &SplatInit) -> anyhow::Result<()> {
         let (_, _, _, max_splats) = get_splat_tex_size(init.num_splats);
@@ -219,9 +151,6 @@ impl SplatReceiver for ExtSplatsData {
 
         self.ext_arrays[0] = Uint32Array::new_with_length((max_splats * 4) as u32);
         self.ext_arrays[1] = Uint32Array::new_with_length((max_splats * 4) as u32);
-        self.local_centers = Float32Array::new_with_length((init.num_splats * 3) as u32);
-        self.local_centers
-            .fill(f32::NAN, 0, self.local_centers.length());
 
         self.sh1 = if init.max_sh_degree < 1 {
             None
@@ -255,8 +184,6 @@ impl SplatReceiver for ExtSplatsData {
         self.invalidate_buffers();
         std::mem::swap(&mut self.buffer_a, &mut Vec::new());
         std::mem::swap(&mut self.buffer_b, &mut Vec::new());
-        self.center_buffer.clear();
-        self.center_buffer.shrink_to_fit();
         Ok(())
     }
 
@@ -281,7 +208,6 @@ impl SplatReceiver for ExtSplatsData {
                 );
             }
             self.buffer_dirty = true;
-            self.refresh_local_centers();
         } else {
             if !batch.center.is_empty() {
                 self.set_center(base, count, batch.center);
@@ -314,7 +240,6 @@ impl SplatReceiver for ExtSplatsData {
             );
         }
         self.buffer_dirty = true;
-        self.refresh_local_centers();
     }
 
     fn set_opacity(&mut self, base: usize, count: usize, opacity: &[f32]) {
@@ -348,7 +273,6 @@ impl SplatReceiver for ExtSplatsData {
             );
         }
         self.buffer_dirty = true;
-        self.refresh_local_centers();
     }
 
     fn set_quat(&mut self, base: usize, count: usize, quat: &[f32]) {
