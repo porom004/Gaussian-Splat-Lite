@@ -34,6 +34,5 @@ export type ExtExtra = {
 export type ExtResult = {
   numSplats: number;
   extArrays: [Uint32Array, Uint32Array];
-  localCenters: Float32Array;
   extra: ExtExtra;
 };
