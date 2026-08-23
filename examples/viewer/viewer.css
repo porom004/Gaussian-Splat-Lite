@@ -724,10 +724,27 @@ kbd {
   transition: transform 100ms linear;
 }
 
-.progress-track.is-indeterminate span {
+.progress-track::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
   width: 42%;
-  animation: progress-scan 1s ease-in-out infinite;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7896ff, #cfff58);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
   transform: translateX(-120%);
+}
+
+.progress-track.is-indeterminate span {
+  opacity: 0;
+}
+
+.progress-track.is-indeterminate::after {
+  animation: progress-scan 1s ease-in-out infinite;
+  opacity: 1;
 }
 
 .loading-detail {
@@ -978,5 +995,10 @@ kbd {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .progress-track.is-indeterminate::after {
+    animation: none !important;
+    transform: translateX(70%);
   }
 }
