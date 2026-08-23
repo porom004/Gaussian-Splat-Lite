@@ -194,14 +194,19 @@ export class SplatMesh extends THREE.Object3D {
     const minimum = new THREE.Vector3().setScalar(Number.POSITIVE_INFINITY);
     const maximum = new THREE.Vector3().setScalar(Number.NEGATIVE_INFINITY);
     const corner = new THREE.Vector3();
-    const signs = [-1, 1];
 
+    if (centersOnly) {
+      this.splats?.forEachCenter((_index, x, y, z) => {
+        if (Number.isNaN(x)) return;
+        corner.set(x, y, z);
+        minimum.min(corner);
+        maximum.max(corner);
+      });
+      return new THREE.Box3(minimum, maximum);
+    }
+
+    const signs = [-1, 1];
     this.splats?.forEachSplat((_index, center, scales, quaternion) => {
-      if (centersOnly) {
-        minimum.min(center);
-        maximum.max(center);
-        return;
-      }
       for (const x of signs) {
         for (const y of signs) {
           for (const z of signs) {
